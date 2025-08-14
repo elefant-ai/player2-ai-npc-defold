@@ -1,5 +1,24 @@
 function init(self)
-	ainpc.chat_completion()
+	print("yay!")
+	local t = {
+		["messages"] = {
+			{
+				["content"] = "You are an entertaining assistant who tries to make jokes.",
+				["role"] = "system"
+			},
+			{
+				["content"] = "Hello, how are you doing today?",
+				["role"] = "user"
+			}
+		},
+		["stream"] = false
+	}
+	ainpc.chat_completion(t, function(self, result)
+		print("GOT SOMETHING:")
+		print(result["result"])
+	end, function(self, err, id)
+		print("Failed", err, id)
+	end)
 end
 
 function final(self)

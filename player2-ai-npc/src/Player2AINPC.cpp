@@ -35,7 +35,7 @@ int PostAPICall(lua_State *L, const char *path, int offsetArgs = 0) {
     }
 
     PerformPost(path, json_string.c_str(), "application/json", headers, [callback, L] (std::string data, httplib::Headers headers) {
-        // We got some data!
+        // on receive
         InvokeCallback(L, callback, [data] (lua_State *L) {
 
             // printf("ASDF got em %s\n", data.c_str());
@@ -53,6 +53,7 @@ int PostAPICall(lua_State *L, const char *path, int offsetArgs = 0) {
             return 1;
         });
     }, [callback_fail, L](std::string data, int error_code) {
+        // on fail
         InvokeCallback(L, callback_fail, [data, error_code] (lua_State *L) {
 
             lua_pushstring(L, data.c_str());
@@ -126,6 +127,7 @@ int FuncNpcSpawn(lua_State* L) {
 // npc_chat(game_id, npc_id, table, function)
 // npc_chat(npc_id, table, function)
 int FuncNpcChat(lua_State* L) {
+    // TODO: Allow string chat as a simple message, parse it into a table.
     return PostAPICallFirstGameIdOrNpcId(L, g_ExtensionSettings.npc_chat.c_str());
 }
 // npc_kill(game_id, npc_id, table, function)
@@ -134,11 +136,85 @@ int FuncNpcKill(lua_State* L) {
     return PostAPICallFirstGameIdOrNpcId(L, g_ExtensionSettings.npc_kill.c_str());
 }
 
+// npc_responses(game_id, function, function, function)
+// npc_responses(function, function, function)
 int FuncNpcResponses(lua_State* L) {
-    // TODO: Write stream using example from before
+    DM_LUA_STACK_CHECK(L, 1);
+
+    // optional game_id
+    int arg_offset = 0;
+    std::string game_id = "{game_id}";
+    if (lua_isstring(L, 1)) {
+        game_id = luaL_checkstring(L, 1);
+        arg_offset = 1;
+    }
+
+    std::string path = g_ExtensionSettings.npc_responses;
+    path = replace_all(path, "{game_id}", game_id);
+
+    // Callbacks
+    auto callback = RegisterCallback(L, arg_offset + 1);
+    auto callback_finish = RegisterCallback(L, arg_offset + 2);
+    auto callback_fail = RegisterCallback(L, arg_offset + 3);
+
+    // TODO: delete this if it is not necessary
+    // Headers
+    // httplib::Headers headers;
+    // httplib::Headers merge_headers = {
+    //     { "Content-Type", "application/json" }
+    // };
+    // headers.insert(merge_headers.begin(), merge_headers.end());
+
+    StreamId id = PerformGetStream(path.c_str(), [L, callback](std::string data) {
+        // on receive
+        InvokeCallback(L, callback, [data] (lua_State *L) {
+
+            bool json_reply = true; // All content is json yeah
+            if (json_reply) {
+                // TODO: convert data to string, then convert to lua table if json
+                // TODO: Push the table
+            }
+
+            lua_createtable(L, 0, 0);
+            lua_pushstring(L, data.c_str());
+            lua_setfield(L, -2, "result");
+
+            return 1;
+        });
+    }, [L, callback_finish](httplib::Headers headers) {
+        // on finish
+        InvokeCallback(L, callback_finish, [] (lua_State *L) {
+            return 0;
+        });
+    }, [L, callback_fail](std::string data, int error_code) {
+        // on fail
+        InvokeCallback(L, callback_fail, [data, error_code] (lua_State *L) {
+
+            lua_pushstring(L, data.c_str());
+            lua_pushinteger(L, error_code);
+
+            return 2;
+        });
+    });
+
+    // Push result
+    lua_pushinteger(L, id);
+
+    // TODO: Write stream using PerformGetStream
+    // - use the function stuff from before, queue em up!!! (on receive, on finish, on error the whole spiel)
     // TODO: test locally
     // TODO: Then, test spawn endpoint
     // TODO: Then, test responses endpoint after chat is called as well
+
+    return 1;
+}
+
+int StopFuncNpcResponses(lua_State* L) {
+    DM_LUA_STACK_CHECK(L, 0);
+
+    StreamId id = luaL_checkinteger(L, 1);
+    StopGetStream(id);
+
     return 0;
 }
 
@@ -147,6 +223,10 @@ const luaL_reg Module_methods[] =
 {
     {"chat_completion", FuncChatCompletion},
     {"npc_spawn", FuncNpcSpawn},
+    {"npc_kill", FuncNpcKill},
+    {"npc_chat", FuncNpcChat},
+    {"npc_responses", FuncNpcResponses},
+    {"stop_npc_responses", StopFuncNpcResponses},
     {0, 0}
 };
 
@@ -177,6 +257,7 @@ dmExtension::Result InitializePlayer2AINPC(dmExtension::Params* params)
 
     // Init other things
     InitQueue();
+    InitHttpShorthands();
 
     return dmExtension::RESULT_OK;
 }

@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <string>
+#include <unordered_map>
 
 #include "httplib.h"
 #include "json.hpp"
@@ -17,8 +18,9 @@ enum RequestMethod {
 };
 
 typedef std::function<void(std::string data, httplib::Headers headers)> ReceiveFunction;
+typedef std::function<void(std::string data)> ReceiveStreamFunction;
 typedef std::function<void(std::string data, int code)> FailFunction;
-typedef std::function<void()> FinishFunction;
+typedef std::function<void(httplib::Headers headers)> FinishFunction;
 
 namespace {
     httplib::Headers GenerateHeaders(const httplib::Headers &headers) {
@@ -37,13 +39,12 @@ namespace {
         std::string host = g_ExtensionSettings.host;
 
         httplib::Client cli(host);
-        // printf("override client TODO make it better\n");
-        // httplib::Client cli("http://localhost:3000");
-        // httplib::Client cli("127.0.0.1", 3000);
-
-        // printf("CLIENT: %s\n", cli.);
 
         return cli;
+    }
+
+    bool ResSucceeded(const httplib::Result &res) {
+        return res && res->status / 100 == 2;
     }
 
     void Receive(const httplib::Result &res, ReceiveFunction onReceive, FailFunction onFail) {
@@ -54,7 +55,7 @@ namespace {
             }
             return;
         }
-        bool succeed = res->status / 100 == 2;
+        bool succeed = ResSucceeded(res);
         if (succeed) {
             if (onReceive) {
                 onReceive(res->body, res->headers);
@@ -112,12 +113,87 @@ void PerformPost(const char *path, const nlohmann::json &json, ReceiveFunction o
     PerformPost(path, body.c_str(), content_type, onReceive, onFail);
 }
 
-void PerformGetStream(const httplib::Headers &headers, bool loop, ReceiveFunction onReceive, FinishFunction onFinish = 0, FailFunction onFail = 0) {
+// http get stream
+typedef unsigned long StreamId;
+namespace {
+    struct StreamContainer {
+        std::thread *thread;
+        bool running;
+    };
 
-    httplib::Client cli = MakeClient();
+    dmMutex::HMutex stream_mutex;
+    std::unordered_map<StreamId, StreamContainer*> streams;
+    StreamId stream_id_counter;    
+}
 
-    httplib::Headers headers_to_send = GenerateHeaders(headers);
+StreamId PerformGetStream(const char *path, const httplib::Headers &headers, bool loop, ReceiveStreamFunction onReceive, FinishFunction onFinish = 0, FailFunction onFail = 0) {
+    DM_MUTEX_SCOPED_LOCK(stream_mutex);
 
-    throw "unimplemented";
-    // TODO: Reference http stream like before
+    StreamContainer *container = new StreamContainer();
+    container->running = true;
+
+    StreamId id = ++stream_id_counter;
+
+    streams[id] = container;
+
+    std::string path_string(path);
+
+    container->thread = new std::thread([id, container, loop, headers, path_string, onReceive, onFinish, onFail] (){
+
+        // TODO: running http stream like before
+
+        httplib::Client cli = MakeClient();
+
+        httplib::Headers headers_to_send = GenerateHeaders(headers);
+
+        do {
+            bool running = true;
+            auto res = cli.Get(path_string, headers_to_send, [container, onReceive](const char *data, size_t data_length) {
+                std::string body(data, data_length);
+                onReceive(body);
+                return container->running;
+            });
+            // we may also cancel if our result is no longer present and we are no longer running
+            if (ResSucceeded(res) || (!res && !container->running)) {
+                if (onFinish) {
+                    onFinish(res ? res->headers : httplib::Headers());
+                }
+            } else {
+                if (onFail) {
+                    onFail(res->body, res->status);
+                }
+            }
+        } while (container->running && loop);
+
+        // When thread finishes, DETATCH the thread, FREE the stream container and REMOVE stream container from map
+        container->thread->detach();
+        DM_MUTEX_SCOPED_LOCK(stream_mutex);
+        streams.erase(id);
+        delete container;
+    });
+
+    return id;
+}
+
+StreamId PerformGetStream(const char *path, bool loop, ReceiveStreamFunction onReceive, FinishFunction onFinish = 0, FailFunction onFail = 0) {
+    return PerformGetStream(path, httplib::Headers(), loop, onReceive, onFinish, onFail);
+}
+StreamId PerformGetStream(const char *path, ReceiveStreamFunction onReceive, FinishFunction onFinish = 0, FailFunction onFail = 0) {
+    return PerformGetStream(path, false, onReceive, onFinish, onFail);
+}
+
+
+void StopGetStream(StreamId id) {
+    DM_MUTEX_SCOPED_LOCK(stream_mutex);
+    if (streams.find(id) != streams.end()) {
+        // should be all we need, the thread will finish on its own
+        streams[id]->running = false;
+        // streams[id]->thread->detach();
+    }
+
+}
+
+// Lua/Defold Init
+void InitHttpShorthands() {
+    stream_mutex = dmMutex::New();
 }

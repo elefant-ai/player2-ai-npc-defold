@@ -6,8 +6,11 @@
 using namespace std;
 
 struct ExtensionSettings {
+    // general config
     string project_key;
+    // host
     string host;
+    // endpoints
     string chat_completion;
     string health;
     string characters;
@@ -33,6 +36,13 @@ void LoadExtensionSettings(dmExtension::AppParams* params) {
     g_ExtensionSettings.npc_kill = dmConfigFile::GetString(cfg, "player2_endpoints.npc_spawn", "/v1/npc/games/{game_id}/npcs/{npc_id}/kill");
     g_ExtensionSettings.npc_responses = dmConfigFile::GetString(cfg, "player2_endpoints.npc_spawn", "/v1/npc/games/{game_id}/npcs/responses");
 
-    // TODO: Fill in the others once this is done
+    // TODO: Fill in:
+    // characters
+    // health
+
+    // temporary override for testing
+    // printf("OVERRIDE host + some endpoints. DELETE EM!\n");
+    // g_ExtensionSettings.host = "http://localhost:3000";
+    // g_ExtensionSettings.npc_responses = "/stream";
 }
 

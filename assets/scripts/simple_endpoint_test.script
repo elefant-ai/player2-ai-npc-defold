@@ -3,7 +3,7 @@ function test_chat_completion()
 	local t = {
 		["messages"] = {
 			{
-				["content"] = "You are an entertaining assistant who tries to make jokes.",
+				["content"] = "You are an assistant.",
 				["role"] = "system"
 			},
 			{
@@ -15,8 +15,7 @@ function test_chat_completion()
 	}
 	ainpc.chat_completion(t,
 	function(self, result)
-		print("GOT SOMETHING:")
-		print(json.encode(result))
+		print("REPLY:", json.encode(result))
 	end,
 	function(self, err, id)
 		print("Failed", err, id)

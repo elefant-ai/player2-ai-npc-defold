@@ -49,7 +49,7 @@ namespace {
 
     void Receive(const httplib::Result &res, ReceiveFunction onReceive, FailFunction onFail) {
         if (!res) {
-            printf("No connection made, socket did not succeed probably. Using Host = %s.\n", g_ExtensionSettings.host.c_str());
+            // printf("Connection failed, socket did not succeed probably. Using Host = %s.\n", g_ExtensionSettings.host.c_str());
             if (onFail) {
                 onFail("No connection made, socket did not succeed probably. Using Host = " + g_ExtensionSettings.host + ".\n", -1);
             }
@@ -62,7 +62,7 @@ namespace {
             }
         } else {
             if (onFail) {
-                onFail(res->body, res->status);
+                onFail(res ? res->body : "Failed to open stream", res ? res->status : -1);
             }
         }
     }
@@ -140,8 +140,6 @@ StreamId PerformGetStream(const char *path, const httplib::Headers &headers, boo
 
     container->thread = new std::thread([id, container, loop, headers, path_string, onReceive, onFinish, onFail] (){
 
-        // TODO: running http stream like before
-
         httplib::Client cli = MakeClient();
 
         httplib::Headers headers_to_send = GenerateHeaders(headers);
@@ -153,16 +151,27 @@ StreamId PerformGetStream(const char *path, const httplib::Headers &headers, boo
                 onReceive(body);
                 return container->running;
             });
-            // we may also cancel if our result is no longer present and we are no longer running
-            if (ResSucceeded(res) || (!res && !container->running)) {
+            bool res_empty = !res;
+            httplib::Headers headers = res_empty ? httplib::Headers() : res->headers;
+            Receive(res, [onFinish](std::string data, httplib::Headers headers) {
                 if (onFinish) {
-                    onFinish(res ? res->headers : httplib::Headers());
+                    onFinish(headers);
                 }
-            } else {
-                if (onFail) {
-                    onFail(res->body, res->status);
+            }, [onFail, onFinish, res_empty, headers, container](std::string data, int err) {
+                // we may also cancel if our result is no longer present and we are no longer running
+                if (res_empty && !container->running) {
+                    if (onFinish) {
+                        onFinish(headers);
+                    }
+                } else {
+                    if (onFail) {
+                        onFail(data + " (response could have cut out mid stream!)", err);                        
+                    }
+                    if (onFinish) {
+                        onFinish(headers);
+                    }
                 }
-            }
+            } );
         } while (container->running && loop);
 
         // When thread finishes, DETATCH the thread, FREE the stream container and REMOVE stream container from map

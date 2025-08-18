@@ -13,9 +13,22 @@ function test_chat_completion()
 		},
 		["stream"] = false
 	}
-	ainpc.chat_completion(t, function(self, result)
+	ainpc.chat_completion(t,
+	function(self, result)
 		print("GOT SOMETHING:")
-		print(result["result"])
+		print(json.encode(result))
+	end,
+	function(self, err, id)
+		print("Failed", err, id)
+	end)
+end
+
+-- Chat completion can also just be a string, which will default to sending one user message.
+function test_chat_completion_simple() 
+	ainpc.chat_completion("Hello, what is 2 + 2?",
+	function(self, result)
+		print("GOT SOMETHING:")
+		print(json.encode(result))
 	end,
 	function(self, err, id)
 		print("Failed", err, id)
@@ -26,51 +39,30 @@ local stream_id = -1
 function test_stream()
 	stream_id = ainpc.npc_responses(function(self, data)
 		print("GOT STREAMED:")
-		print(data["result"])
-	end,
+		print(data["count"])
+		end,
 	function(self)
 		print("(finished stream)")
 	end,
 	function(self, err, id)
-		print("Stream Failed", err, id)		
+		print("Stream Failed:", err, id)		
 	end)
 end
+
 
 function init(self)
 	print("init")
 	msg.post(".", "acquire_input_focus")
-	test_stream()
+	test_chat_completion()
+	-- test_chat_completion_simple()
+	-- test_agent()
 end
 
 function final(self)
-	-- Add finalization code here
-	-- Learn more: https://defold.com/manuals/script/
-	-- Remove this function if not needed
-end
-
-local x = 0
-
-function update(self, dt)
-	-- Add update code here
-	-- Learn more: https://defold.com/manuals/script/
-	-- Remove this function if not needed
-	x = x + 1
-	if x == 200 then
-		if stream_id ~= -1 then
-			print("STOP STOP STOP!")
-			ainpc.stop_npc_responses(stream_id)
-			stream_id = -1
-		end
+	if stream_id ~= -1 then
+		ainpc.stop_npc_responses(stream_id)
+		stream_id = -1
 	end
-end
-
-function fixed_update(self, dt)
-	-- This function is called if 'Fixed Update Frequency' is enabled in the Engine section of game.project
-	-- Can be coupled with fixed updates of the physics simulation if 'Use Fixed Timestep' is enabled in
-	-- Physics section of game.project
-	-- Add update code here
-	-- Learn more: https://defold.com/manuals/script/
-	-- Remove this function if not needed
 end
 
 function on_message(self, message_id, message, sender)

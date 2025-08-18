@@ -13,7 +13,7 @@
 static void stackDump (lua_State *L) {
       int i;
       int top = lua_gettop(L);
-      printf("lmfao stack %d", top);
+      printf("lmfao stack %d: ", top);
       for (i = 1; i <= top; i++) {  /* repeat for each level */
         int t = lua_type(L, i);
         switch (t) {

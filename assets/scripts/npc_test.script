@@ -1,0 +1,108 @@
+
+function on_receive_agent_reply(self, reply)
+	local msg = reply["message"]
+	print("GOT REPLY:", msg)
+end
+
+local npc_id = nil
+local stream_id = -1
+
+function init(self)
+	ainpc.npc_spawn({
+		["character_description"] = "A crazed scientist on the hunt for gold",
+		["name"] = "Victor J. Johnson",
+		["short_name"] = "Victor",
+		["system_prompt"] = "",
+		["voice_id"] = "test"
+	},
+	function(self, id)
+		print("Agent spawned with id", id)
+		npc_id = id
+
+		-- Stream NPC replies
+		stream_id = ainpc.npc_responses(on_receive_agent_reply,
+		function(self)
+			print("(finished stream)")
+		end,
+		function(self, err, id)
+			print("Stream Failed:", err, id)		
+		end)
+
+		-- Send the first message
+		ainpc.npc_chat(npc_id, {
+			["game_state_info"] = "It's very hot outside",
+			["sender_message"] = "Hello, how are you doing today?",
+			["sender_name"] = ""
+		},
+		function(self)
+			print("(chat success)")
+		end,
+		function(self, err, id)
+			print("chat failed:", err, id)		
+		end)
+	end,
+	function(self, failure, err)
+		print("Agent failed to spawn:", failure, err)
+	end)
+end
+
+function final(self)
+	-- Kill it
+	if npc_id then
+		ainpc.npc_kill(npc_id, function(self)
+			print("Successfully killed NPC")
+			npc_id = nil
+		end,
+		function(self, failure, err)
+			print("Agent failed to kill:", failure, err)
+			-- If npc not found, we do not have a valid npc id.
+			if err == 404 then
+				npc_id = nil
+			end
+		end)
+	end
+
+	if stream_id then
+		ainpc.stop_npc_responses(stream_id)
+		stream_id = -1
+	end
+end
+
+function update(self, dt)
+	-- Add update code here
+	-- Learn more: https://defold.com/manuals/script/
+	-- Remove this function if not needed
+end
+
+function fixed_update(self, dt)
+	-- This function is called if 'Fixed Update Frequency' is enabled in the Engine section of game.project
+	-- Can be coupled with fixed updates of the physics simulation if 'Use Fixed Timestep' is enabled in
+	-- Physics section of game.project
+	-- Add update code here
+	-- Learn more: https://defold.com/manuals/script/
+	-- Remove this function if not needed
+end
+
+function on_message(self, message_id, message, sender)
+	-- Add message-handling code here
+	-- Learn more: https://defold.com/manuals/message-passing/
+	-- Remove this function if not needed
+end
+
+function on_input(self, action_id, action)
+	-- Add input-handling code here. The game object this script is attached to
+	-- must have acquired input focus:
+	--
+	--    msg.post(".", "acquire_input_focus")
+	--
+	-- All mapped input bindings will be received. Mouse and touch input will
+	-- be received regardless of where on the screen it happened.
+	-- Learn more: https://defold.com/manuals/input/
+	-- Remove this function if not needed
+end
+
+function on_reload(self)
+	-- Add reload-handling code here
+	-- Learn more: https://defold.com/manuals/hot-reload/
+	-- Remove this function if not needed
+end

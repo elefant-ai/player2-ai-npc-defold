@@ -1,5 +1,6 @@
 
 #include <iostream>
+#include <algorithm>
 
 #include "ExtensionSettings.hpp"
 #include "Player2AINPC.hpp"
@@ -15,14 +16,25 @@
 using json = nlohmann::json;
 // using namespace nlohmann::literals;
 
-int PostAPICall(lua_State *L, const char *path, int offsetArgs = 0) {
+// return whether json parse was success or not
+bool PushLuaTableFromJsonString(lua_State *L, std::string str) {
+    // it's that simple
+    return dmScript::JsonToLua(L, str.c_str(), str.length());
+}
+
+int TestJsonDecode(lua_State* L) {
+    DM_LUA_STACK_CHECK(L, 1);
+    return 1;
+}
+
+int PostAPICall(lua_State *L, const char *path, int offsetArgs = 0, bool has_body = true) {
     DM_LUA_STACK_CHECK(L, 0);
 
     // Read input as json string
-    std::string json_string = ReadJsonString(L, offsetArgs + 1);
+    std::string json_string = has_body ? ReadJsonString(L, offsetArgs + 1) : "";
 
-    auto callback = RegisterCallback(L, offsetArgs + 2);
-    auto callback_fail = RegisterCallback(L, offsetArgs + 3);
+    auto callback = RegisterCallback(L, offsetArgs + (has_body ? 2 : 1));
+    auto callback_fail = RegisterCallback(L, offsetArgs + (has_body ? 3 : 2));
 
     bool json_input = true; // All content is json yeah
 
@@ -35,26 +47,42 @@ int PostAPICall(lua_State *L, const char *path, int offsetArgs = 0) {
     }
 
     PerformPost(path, json_string.c_str(), "application/json", headers, [callback, L] (std::string data, httplib::Headers headers) {
-        // on receive
-        InvokeCallback(L, callback, [data] (lua_State *L) {
 
-            // printf("ASDF got em %s\n", data.c_str());
+        // printf("GOT REPLY: %s\n", data.c_str());
 
-            bool json_reply = true; // All content is json yeah
-            if (json_reply) {
-                // TODO: convert data to string, then convert to lua table if json
-                // TODO: Push the table
+        // are we json?
+        bool json_reply = false; // by default no
+        for (auto v = headers.find("content-type"); v != headers.end(); ++v) {
+            std::string val = v->second;
+            std::transform(val.begin(), val.end(), val.begin(), ::tolower);
+            if (val == "application/json") {
+                json_reply = true;
+                break;
             }
+        }
 
-            lua_createtable(L, 0, 0);
-            lua_pushstring(L, data.c_str());
-            lua_setfield(L, -2, "result");
+
+        // on receive
+        InvokeCallback(L, callback, [data, json_reply] (lua_State *L) {
+            DM_LUA_STACK_CHECK(L, 1);
+
+            if (json_reply) {
+                if (!PushLuaTableFromJsonString(L, data)) {
+                    // We failed to parse json, just default to string.
+                    lua_pushstring(L, data.c_str());
+                }
+            } else {
+                lua_pushstring(L, data.c_str());
+            }
 
             return 1;
         });
     }, [callback_fail, L](std::string data, int error_code) {
         // on fail
         InvokeCallback(L, callback_fail, [data, error_code] (lua_State *L) {
+            DM_LUA_STACK_CHECK(L, 2);
+
+            // printf("failed %s\n", data.c_str());
 
             lua_pushstring(L, data.c_str());
             lua_pushinteger(L, error_code);
@@ -66,8 +94,10 @@ int PostAPICall(lua_State *L, const char *path, int offsetArgs = 0) {
     return 0;
 }
 
+typedef std::function<void(lua_State *L, std::string game_id, std::string npc_id, int argOffset)> PostAPICallFirstGameIdOrNpcIdPreprocess;
+
 // Post but allow for game_id as an optional param and replace game_id and npc_id in the query path
-int PostAPICallFirstGameIdOrNpcId(lua_State *L, const char *path, bool gameid_only = false) {
+int PostAPICallFirstGameIdOrNpcId(lua_State *L, const char *path, bool gameid_only = false, bool has_body = true, PostAPICallFirstGameIdOrNpcIdPreprocess preprocess = 0) {
     // Here's how it works:
     // game id first
     // npc id second
@@ -109,35 +139,80 @@ int PostAPICallFirstGameIdOrNpcId(lua_State *L, const char *path, bool gameid_on
     path_result = replace_all(path, "{game_id}", game_id);
     path_result = replace_all(path, "{npc_id}", npc_id);
 
-    printf("CREATING NPC: %s with arg offsets: %d\n", path_result.c_str(), argOffset);
+    if (preprocess) {
+        preprocess(L, game_id, npc_id, argOffset);
+    }
 
-    return PostAPICall(L, path_result.c_str(), argOffset);
+    // printf("CREATING NPC: %s with arg offsets: %d\n", path_result.c_str(), argOffset);
+
+    return PostAPICall(L, path_result.c_str(), argOffset, has_body);
 }
 
-// chat_completion(table, function, function)
+// chat_completion(table/string, function, function?)
 int FuncChatCompletion(lua_State* L) {
+    // Optional string only to talk to the agent
+    if (lua_isstring(L, 1)) {
+        std::string message = luaL_checkstring(L, 1);
+        std::string json = "{";
+            json += "\"messages\": [";
+                json += "{";
+                    json += "\"content\": ";
+                        json += "\"";
+                        json += message;
+                        json += "\"";
+                    json += ",";
+                    json += "\"role\": ";
+                        json += "\"user\"";
+                json += "}";
+            json += "]";
+        json += "}";
+
+        lua_pushstring(L, json.c_str());
+        // replace the old string to the new string we just made and remove the pushed string from the top
+        lua_insert(L, 1);
+        lua_remove(L, 2);
+    }
     return PostAPICall(L, g_ExtensionSettings.chat_completion.c_str());
 }
 
-// npc_spawn(game_id, table, function)
-// npc_spawn(table, function)
+// npc_spawn(game_id, table, function, function)
+// npc_spawn(table, function, function)
 int FuncNpcSpawn(lua_State* L) {
     return PostAPICallFirstGameIdOrNpcId(L, g_ExtensionSettings.npc_spawn.c_str(), true);
 }
-// npc_chat(game_id, npc_id, table, function)
-// npc_chat(npc_id, table, function)
+// npc_chat(game_id, npc_id, table/string, function? function?)
+// npc_chat(npc_id, table/string, function?, function?)
 int FuncNpcChat(lua_State* L) {
-    // TODO: Allow string chat as a simple message, parse it into a table.
-    return PostAPICallFirstGameIdOrNpcId(L, g_ExtensionSettings.npc_chat.c_str());
+    return PostAPICallFirstGameIdOrNpcId(L, g_ExtensionSettings.npc_chat.c_str(), false, true, [](lua_State *L, std::string game_id, std::string npc_id, int arg_offset) {
+
+        // Optional string only to talk to the agent
+
+        // the arg AFTER arg offset is the string
+        int string_index = arg_offset + 1;
+        if (lua_isstring(L, string_index)) {
+            std::string message = luaL_checkstring(L, arg_offset + 1);
+
+            // Add table to stack
+            lua_createtable(L, 0, 2);
+            lua_pushstring(L, message.c_str());
+            lua_setfield(L, -2, "sender_message");
+            lua_pushstring(L, "");
+            lua_setfield(L, -2, "sender_name");
+
+            // replace the string from the table we just made and remove the table from the top
+            lua_insert(L, string_index);
+            lua_remove(L, string_index + 1);
+        }
+    });
 }
-// npc_kill(game_id, npc_id, table, function)
-// npc_kill(npc_id, table, function)
+// npc_kill(game_id, npc_id, function?, function?)
+// npc_kill(npc_id, function?, function?)
 int FuncNpcKill(lua_State* L) {
-    return PostAPICallFirstGameIdOrNpcId(L, g_ExtensionSettings.npc_kill.c_str());
+    return PostAPICallFirstGameIdOrNpcId(L, g_ExtensionSettings.npc_kill.c_str(), false, false);
 }
 
-// npc_responses(game_id, function, function, function)
-// npc_responses(function, function, function)
+// npc_responses(game_id, function, function?, function?)
+// npc_responses(function, function?, function?)
 int FuncNpcResponses(lua_State* L) {
     DM_LUA_STACK_CHECK(L, 1);
 
@@ -164,35 +239,37 @@ int FuncNpcResponses(lua_State* L) {
     //     { "Content-Type", "application/json" }
     // };
     // headers.insert(merge_headers.begin(), merge_headers.end());
-
     StreamId id = PerformGetStream(path.c_str(), [L, callback](std::string data) {
         // on receive
         InvokeCallback(L, callback, [data] (lua_State *L) {
+            DM_LUA_STACK_CHECK(L, 1);
 
             bool json_reply = true; // All content is json yeah
             if (json_reply) {
-                // TODO: convert data to string, then convert to lua table if json
-                // TODO: Push the table
-            }
+                if (!PushLuaTableFromJsonString(L, data)) {
 
-            lua_createtable(L, 0, 0);
-            lua_pushstring(L, data.c_str());
-            lua_setfield(L, -2, "result");
+                    printf("Failed to parse json reply: %s", data.c_str());
+                    lua_pushstring(L, data.c_str());
+                }
+            } else {
+                lua_pushstring(L, data.c_str());
+            }
 
             return 1;
         });
     }, [L, callback_finish](httplib::Headers headers) {
         // on finish
         InvokeCallback(L, callback_finish, [] (lua_State *L) {
+            DM_LUA_STACK_CHECK(L, 0);
             return 0;
         });
     }, [L, callback_fail](std::string data, int error_code) {
         // on fail
         InvokeCallback(L, callback_fail, [data, error_code] (lua_State *L) {
+            DM_LUA_STACK_CHECK(L, 2);
 
             lua_pushstring(L, data.c_str());
             lua_pushinteger(L, error_code);
-
             return 2;
         });
     });
@@ -200,15 +277,10 @@ int FuncNpcResponses(lua_State* L) {
     // Push result
     lua_pushinteger(L, id);
 
-    // TODO: Write stream using PerformGetStream
-    // - use the function stuff from before, queue em up!!! (on receive, on finish, on error the whole spiel)
-    // TODO: test locally
-    // TODO: Then, test spawn endpoint
-    // TODO: Then, test responses endpoint after chat is called as well
-
     return 1;
 }
 
+// stop_npc_responses(int)
 int StopFuncNpcResponses(lua_State* L) {
     DM_LUA_STACK_CHECK(L, 0);
 

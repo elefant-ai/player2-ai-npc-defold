@@ -134,7 +134,6 @@ json LuaTableToJson(lua_State *L) {
 
 // Read a json string as a table or a string
 std::string ReadJsonString(lua_State *L, int index) {
-    luaL_checktype(L, index, LUA_TTABLE);
     if (lua_istable(L, index))
     {
         // copy table to top temporarily and process it
@@ -145,8 +144,9 @@ std::string ReadJsonString(lua_State *L, int index) {
         lua_pop(L, 1);
 
         return result;
-    } else if (lua_isstring(L, 1)) {
-        return luaL_checkstring(L, 1);
+    } else if (lua_isstring(L, index)) {
+        std::string result = luaL_checkstring(L, index);
+        return result;
     }
     printf("Invalid argument passed, must be either a table or string.\n");
     throw "invalid argument passed, must be either a table or a string.";

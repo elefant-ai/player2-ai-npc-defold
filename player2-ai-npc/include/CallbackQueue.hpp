@@ -10,6 +10,8 @@ typedef std::function<int(lua_State *L)> PopulateCallbackArgsFunction;
 
 typedef unsigned long CallbackId;
 
+const CallbackId INVALID_CALLBACK = 0;
+
 namespace {
     // Internal stuff
 
@@ -100,7 +102,7 @@ namespace {
     // Subscriptions
     dmMutex::HMutex subscriptions_mutex;
     std::unordered_map<CallbackId, CallbackSubscription*> subscriptions;
-    CallbackId subscription_id_counter = 0;
+    CallbackId subscription_id_counter = 1;
 
     // Invoke
     dmMutex::HMutex command_queue_mutex;

@@ -3,8 +3,8 @@ scale_along_z: 0
 embedded_instances {
   id: "go"
   data: "components {\n"
-  "  id: \"simple_endpoint_test\"\n"
-  "  component: \"/assets/scripts/simple_endpoint_test.script\"\n"
+  "  id: \"health_test\"\n"
+  "  component: \"/assets/scripts/health_test.script\"\n"
   "}\n"
   ""
 }

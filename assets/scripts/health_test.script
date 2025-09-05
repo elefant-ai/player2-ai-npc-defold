@@ -1,0 +1,8 @@
+function init(self)
+	ainpc.health(function(self, result)
+		print("HEALTH: GOT:", result) --//json.encode(result))
+	end,
+	function(self, err, id)
+		print("HEALTH: Failed:", err, id)
+	end)
+end

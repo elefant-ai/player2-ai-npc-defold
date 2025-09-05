@@ -27,28 +27,43 @@ int TestJsonDecode(lua_State* L) {
     return 1;
 }
 
-int PostAPICall(lua_State *L, const char *path, int offsetArgs = 0, bool has_body = true) {
+int APICallInternal(lua_State *L, const char *path, int offsetArgs = 0, bool has_body = true, bool post = true) {
     DM_LUA_STACK_CHECK(L, 0);
 
+    printf("asdf 0\n");
     // Read input as json string
     std::string json_string = has_body ? ReadJsonString(L, offsetArgs + 1) : "";
+
+    printf("asdf 1\n");
 
     auto callback = RegisterCallback(L, offsetArgs + (has_body ? 2 : 1));
     auto callback_fail = RegisterCallback(L, offsetArgs + (has_body ? 3 : 2));
 
+    // on receive TODO DELETE ME
+    InvokeCallback(L, callback, [] (lua_State *L) {
+        DM_LUA_STACK_CHECK(L, 1);
+
+        printf("ASDF calling\n");
+        lua_pushstring(L, "PISSY BABY BOY");
+
+        return 1;
+    });
+
     bool json_input = true; // All content is json yeah
 
     httplib::Headers headers;
-    if (json_input) {
+    if (json_input && has_body && post) {
         httplib::Headers merge_headers = {
             { "Content-Type", "application/json" }
         };
         headers.insert(merge_headers.begin(), merge_headers.end());
     }
 
-    PerformPost(path, json_string.c_str(), "application/json", headers, [callback, L] (std::string data, httplib::Headers headers) {
+    printf("asdf 2\n");
 
-        // printf("GOT REPLY: %s\n", data.c_str());
+    auto on_succeed = [callback, L] (std::string data, httplib::Headers headers) {
+
+        printf("GOT REPLY: %s\n", data.c_str());
 
         // are we json?
         bool json_reply = false; // by default no
@@ -77,21 +92,41 @@ int PostAPICall(lua_State *L, const char *path, int offsetArgs = 0, bool has_bod
 
             return 1;
         });
-    }, [callback_fail, L](std::string data, int error_code) {
+    };
+
+    auto on_fail = [callback_fail, L](std::string data, int error_code) {
         // on fail
+        printf("INVOKING FAIL\n");
         InvokeCallback(L, callback_fail, [data, error_code] (lua_State *L) {
             DM_LUA_STACK_CHECK(L, 2);
 
-            // printf("failed %s\n", data.c_str());
+            printf("failed %s\n", data.c_str());
 
             lua_pushstring(L, data.c_str());
             lua_pushinteger(L, error_code);
 
             return 2;
         });
-    });
+    };
+
+    printf("asdf 3\n");
+
+    // post and/or get
+    if (post) {
+        PerformPost(path, json_string.c_str(), "application/json", headers, on_succeed, on_fail);
+    } else {
+        PerformGet(path, headers, on_succeed, on_fail);
+    }
+    printf("asdf END\n");
 
     return 0;
+}
+
+int PostAPICall(lua_State *L, const char *path, int offsetArgs = 0, bool has_body = true) {
+    APICallInternal(L, path, offsetArgs, has_body, true);
+}
+int GetAPICall(lua_State *L, const char *path, int offsetArgs = 0) {
+    APICallInternal(L, path, offsetArgs, false, false);
 }
 
 typedef std::function<void(lua_State *L, std::string game_id, std::string npc_id, int argOffset)> PostAPICallFirstGameIdOrNpcIdPreprocess;
@@ -148,6 +183,31 @@ int PostAPICallFirstGameIdOrNpcId(lua_State *L, const char *path, bool gameid_on
     return PostAPICall(L, path_result.c_str(), argOffset, has_body);
 }
 
+// init(client_id, perform_auth(validationUrl)? )
+int FuncInitPlayer2AINPC(lua_State *L) {
+    DM_LUA_STACK_CHECK(L, 0);
+
+    // Arg 1: client_id (required)
+    std::string client_id = luaL_checkstring(L, 1);
+    g_ExtensionSettings.client_id = client_id;
+
+    // Arg 2: perform_auth function (optional)
+    if (lua_isfunction(L, 2)) {
+        g_ExtensionSettings.auth_callback = RegisterCallback(L, 2);
+    }
+
+    return 0;
+}
+
+// cancel_auth()
+int FuncCancelAuth(lua_State *L) {
+    DM_LUA_STACK_CHECK(L, 0);
+
+    throw "Not implemented! TODO: Some kind of global flag or something";
+
+    // return 0;
+}
+
 // chat_completion(table/string, function, function?)
 int FuncChatCompletion(lua_State* L) {
     // Optional string only to talk to the agent
@@ -175,8 +235,13 @@ int FuncChatCompletion(lua_State* L) {
     return PostAPICall(L, g_ExtensionSettings.chat_completion.c_str());
 }
 
-// npc_spawn(game_id, table, function, function)
-// npc_spawn(table, function, function)
+// health(function, function?)
+int FuncHealth(lua_State* L) {
+    return GetAPICall(L, g_ExtensionSettings.health.c_str());
+}
+
+// npc_spawn(game_id, table, function, function?)
+// npc_spawn(table, function, function?)
 int FuncNpcSpawn(lua_State* L) {
     return PostAPICallFirstGameIdOrNpcId(L, g_ExtensionSettings.npc_spawn.c_str(), true);
 }
@@ -293,6 +358,9 @@ int StopFuncNpcResponses(lua_State* L) {
 // Functions exposed to Lua
 const luaL_reg Module_methods[] =
 {
+    {"init", FuncInitPlayer2AINPC},
+    {"cancel_auth", FuncCancelAuth},
+    {"health", FuncHealth},
     {"chat_completion", FuncChatCompletion},
     {"npc_spawn", FuncNpcSpawn},
     {"npc_kill", FuncNpcKill},

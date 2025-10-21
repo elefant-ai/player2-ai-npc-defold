@@ -1,5 +1,9 @@
 #pragma once
 
+// httplib allow for https
+// I hate how defold does not print exceptions properly!
+#define CPPHTTPLIB_OPENSSL_SUPPORT
+
 #include <iostream>
 #include <string>
 #include <unordered_map>
@@ -61,7 +65,9 @@ namespace {
     httplib::Client MakeClient() {
         std::string host = g_ExtensionSettings.host;
 
+        // printf("HOST pre %s\n", host.c_str());
         httplib::Client cli(host);
+        // printf("HOST POST\n");
 
         return cli;
     }

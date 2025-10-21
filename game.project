@@ -17,6 +17,7 @@ scale_mode = stretch
 
 [project]
 title = player2-ai-npc-defold
+dependencies#0 = https://github.com/elefant-ai/defold-openssl/archive/master.zip
 
 [library]
 include_dirs = player2-ai-npc

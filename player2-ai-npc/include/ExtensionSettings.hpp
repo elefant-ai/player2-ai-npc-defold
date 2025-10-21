@@ -31,7 +31,7 @@ void LoadExtensionSettings(dmExtension::AppParams* params) {
 
     // client_id needs to be set manually via function
 
-    g_ExtensionSettings.host = dmConfigFile::GetString(cfg, "player2_endpoints.host", "https://api.player2.game");
+    g_ExtensionSettings.host = dmConfigFile::GetString(cfg, "player2_endpoints.host", "https://api.player2.game:443");
 
     // health
     g_ExtensionSettings.health = dmConfigFile::GetString(cfg, "player2_endpoints.health", "/v1/health");

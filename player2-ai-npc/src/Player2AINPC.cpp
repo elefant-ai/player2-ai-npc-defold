@@ -39,16 +39,6 @@ int APICallInternal(lua_State *L, const char *path, int offsetArgs = 0, bool has
     auto callback = RegisterCallback(L, offsetArgs + (has_body ? 2 : 1));
     auto callback_fail = RegisterCallback(L, offsetArgs + (has_body ? 3 : 2));
 
-    // on receive TODO DELETE ME
-    InvokeCallback(L, callback, [] (lua_State *L) {
-        DM_LUA_STACK_CHECK(L, 1);
-
-        printf("ASDF calling\n");
-        lua_pushstring(L, "PISSY BABY BOY");
-
-        return 1;
-    });
-
     bool json_input = true; // All content is json yeah
 
     httplib::Headers headers;
@@ -123,10 +113,10 @@ int APICallInternal(lua_State *L, const char *path, int offsetArgs = 0, bool has
 }
 
 int PostAPICall(lua_State *L, const char *path, int offsetArgs = 0, bool has_body = true) {
-    APICallInternal(L, path, offsetArgs, has_body, true);
+    return APICallInternal(L, path, offsetArgs, has_body, true);
 }
 int GetAPICall(lua_State *L, const char *path, int offsetArgs = 0) {
-    APICallInternal(L, path, offsetArgs, false, false);
+    return APICallInternal(L, path, offsetArgs, false, false);
 }
 
 typedef std::function<void(lua_State *L, std::string game_id, std::string npc_id, int argOffset)> PostAPICallFirstGameIdOrNpcIdPreprocess;

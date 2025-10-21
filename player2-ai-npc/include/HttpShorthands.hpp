@@ -85,7 +85,8 @@ namespace {
                     break;
                 }
                 default:
-                    throw "Invalid/Not implemented request method: " + requestMethod;
+                    // throw "Invalid/Not implemented request method: " + requestMethod;
+                    assert(false);
             }
         }, std::string(path), requestMethod, std::string(body ? body : ""), std::string(content_type ? content_type : ""), headers_to_send, onReceive, onFail);
 

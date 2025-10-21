@@ -149,5 +149,6 @@ std::string ReadJsonString(lua_State *L, int index) {
         return result;
     }
     printf("Invalid argument passed, must be either a table or string.\n");
-    throw "invalid argument passed, must be either a table or a string.";
+    assert(false);
+    // throw "invalid argument passed, must be either a table or a string.";
 }

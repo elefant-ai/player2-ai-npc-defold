@@ -140,7 +140,8 @@ void UnregisterCallback(CallbackId callback_id) {
 
     if (subscriptions.find(callback_id) == subscriptions.end()) {
         printf("Invalid callback id: %lu\n", callback_id);
-        throw "invalid callback id.";
+        assert(false);
+        // throw "invalid callback id.";
     }
 
     CallbackSubscription *sub = subscriptions[callback_id];
@@ -167,7 +168,8 @@ void InvokeCallback(lua_State *L, CallbackId callback_id, PopulateCallbackArgsFu
     // Valid subscription must exist at time of invoke queue (fine if it gets removed later)
     if (subscriptions.find(callback_id) == subscriptions.end()) {
         printf("Invalid callback id: %lu\n", callback_id);
-        throw "invalid callback id.";
+        assert(false);
+        // throw "invalid callback id.";
     }
 
     // Create invoke command

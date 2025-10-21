@@ -11,6 +11,10 @@
 #define CPPHTTPLIB_VERSION "0.25.0"
 #define CPPHTTPLIB_VERSION_NUM "0x001900"
 
+// No exceptions on defold
+#define CPPHTTPLIB_NO_EXCEPTIONS true
+
+
 /*
  * Platform compatibility check
  */

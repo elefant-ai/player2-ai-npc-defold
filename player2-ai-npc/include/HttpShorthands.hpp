@@ -17,10 +17,6 @@
 #include <dmsdk/sdk.h>
 #include "OpenUrl.hpp"
 
-
-// TODO: Set to true once its verified
-#define COMPRESS_BODY false
-
 enum RequestMethod {
     GET, POST
 };

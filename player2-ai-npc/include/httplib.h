@@ -8,6 +8,8 @@
 #ifndef CPPHTTPLIB_HTTPLIB_H
 #define CPPHTTPLIB_HTTPLIB_H
 
+#define CPPHTTPLIB_NO_EXCEPTIONS true
+
 #define CPPHTTPLIB_VERSION "0.25.0"
 #define CPPHTTPLIB_VERSION_NUM "0x001900"
 
@@ -11278,46 +11280,63 @@ inline Client::Client(const std::string &scheme_host_port,
   const static std::regex re(
       R"((?:([a-z]+):\/\/)?(?:\[([a-fA-F\d:]+)\]|([^:/?#]+))(?::(\d+))?)");
 
+    printf("asdf INTERNAL 0\n");
+
   std::smatch m;
   if (std::regex_match(scheme_host_port, m, re)) {
     auto scheme = m[1].str();
+    printf("asdf INTERNAL 1\n");
 
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
     if (!scheme.empty() && (scheme != "http" && scheme != "https")) {
+    printf("asdf INTERNAL SQUIBBY ?\n");
 #else
     if (!scheme.empty() && scheme != "http") {
+    printf("asdf INTERNAL BLSQUIBBY ?\n");
 #endif
 #ifndef CPPHTTPLIB_NO_EXCEPTIONS
+    printf("asdf INTERNAL TRSQUIBBY ?\n");
       std::string msg = "'" + scheme + "' scheme is not supported.";
+    printf("asdf INTERNAL FAILURE INVALID ARGS: %s?\n", msg.c_str());
       throw std::invalid_argument(msg);
 #endif
+    printf("asdf INTERNAL 9999 ?\n");
       return;
     }
+    printf("asdf INTERNAL pre ruhbuh?\n");
 
     auto is_ssl = scheme == "https";
 
     auto host = m[2].str();
     if (host.empty()) { host = m[3].str(); }
 
+    printf("asdf INTERNAL m size: %zu\n", m.size());
+    printf("asdf INTERNAL IS_SSL: %d\n", is_ssl);
+    printf("asdf IS_SSL: %d\n", is_ssl);
     auto port_str = m[4].str();
+    printf("asdf INTERNAL PORT: %s\n", port_str.c_str());
     auto port = !port_str.empty() ? std::stoi(port_str) : (is_ssl ? 443 : 80);
 
     if (is_ssl) {
+        printf("asdf INTERNAL SSL bereuh?\n");
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
       cli_ = detail::make_unique<SSLClient>(host, port, client_cert_path,
                                             client_key_path);
       is_ssl_ = is_ssl;
 #endif
     } else {
+  printf("asdf INTERNAL bereu31322h?\n");
       cli_ = detail::make_unique<ClientImpl>(host, port, client_cert_path,
                                              client_key_path);
     }
   } else {
+  printf("asdf INTERNAL bereuh?\n");
     // NOTE: Update TEST(UniversalClientImplTest, Ipv6LiteralAddress)
     // if port param below changes.
     cli_ = detail::make_unique<ClientImpl>(scheme_host_port, 80,
                                            client_cert_path, client_key_path);
   }
+  printf("asdf INTERNAL guh?\n");
 } // namespace detail
 
 inline Client::Client(const std::string &host, int port)
